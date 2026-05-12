@@ -190,14 +190,14 @@ function Invoke-External {
         throw $lastStartError
     }
 
-    if ($InputFile) {
-        $content = [System.IO.File]::ReadAllText($InputFile)
-        $process.StandardInput.Write($content)
-    }
-    $process.StandardInput.Close()
-
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()
     $stderrTask = $process.StandardError.ReadToEndAsync()
+
+    if ($InputFile) {
+        $content = [System.IO.File]::ReadAllText($InputFile)
+        [void]$process.StandardInput.WriteAsync($content).GetAwaiter().GetResult()
+    }
+    $process.StandardInput.Close()
 
     $timedOut = $false
     $memoryExceeded = $false
@@ -248,11 +248,29 @@ function Find-PythonCommand {
         [hashtable]$BuildConfig
     )
 
+    $candidates = [System.Collections.Generic.List[string]]::new()
+
     if ($BuildConfig.ContainsKey("pythonCommand")) {
-        return [string]$BuildConfig.pythonCommand
+        $configured = [string]$BuildConfig.pythonCommand
+        if (-not [string]::IsNullOrWhiteSpace($configured)) {
+            $candidates.Add($configured) | Out-Null
+        }
     }
 
     foreach ($candidate in @("python3", "python")) {
+        if ($candidate -notin $candidates) {
+            $candidates.Add($candidate) | Out-Null
+        }
+    }
+
+    foreach ($candidate in $candidates) {
+        if ([System.IO.Path]::IsPathRooted($candidate)) {
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                return $candidate
+            }
+            continue
+        }
+
         if (Get-Command $candidate -ErrorAction SilentlyContinue) {
             return $candidate
         }
