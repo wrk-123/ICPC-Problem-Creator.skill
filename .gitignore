@@ -11,3 +11,5 @@ examples/**
 !examples/compile-by-command/**
 !examples/magic-and-crab
 !examples/magic-and-crab/**
+!examples/mt-louguan-mine-sweeping
+!examples/mt-louguan-mine-sweeping/**
