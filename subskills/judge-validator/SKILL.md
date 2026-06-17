@@ -23,6 +23,7 @@ user-invocable: false
 - 严格检查格式、范围、额外空白与 EOF
 - 普通题 checker 要把 `ouf` 与 `ans` 都读到 EOF
 - 交互题 interactor 要严格限制查询次数、命令格式、参数范围与结束规则
+- 交互题如果存在多种合法回答风格，interactor 应尽量支持多策略，而不是只固定一种回答路径
 - judge 行为必须与题面和 `config.json` 对齐
 - 不允许保留模板或占位逻辑
 
@@ -45,6 +46,10 @@ user-invocable: false
 - 普通题 checker 原则上要把 `ouf` 与 `ans` 都读到 EOF。
 - interactor 中要显式校验命令字、参数范围、查询次数、终止条件、返回值语义，并确保与题面完全一致。
 - 如果 interactor 需要输出轨迹供后续分析或 checker 使用，保持该输出格式稳定、可复现。
+- 对自适应交互题，优先同时准备固定策略与多种自适应策略；典型地至少有“能答 `0` 就答 `0`”和“能答 `1` 就答 `1`”两种。
+- 如需让不同数据组选择不同 interactor 行为，可以让 generator 在输入里额外携带隐藏 `strategy` 字段；validator 要接受它，interactor 要读取它，但题面对选手公开的协议仍应保持一致。
+- 如果固定策略就足以复现某类 hack，优先实现“按需判路径 / 标记路径”的轻量逻辑，避免为了 judge 方便而在 interactor 中预处理所有点对路径，反而把本该卡掉的 MLE 掩盖掉。
+- 调试交互题时，优先保留稳定的 interactor 输入与轨迹格式，方便之后导出“喂给 interactor 的 stdin”做离线复盘。
 
 ## 题面一致性检查
 

@@ -128,7 +128,10 @@
 ./scripts/export-testdata.ps1 -Workspace "examples/example-problem"
 ```
 
-它会根据 `config.json` 编译 `generator + validator + main solution`，导出静态的 `.in/.ans` 文件到题目目录下的 `exported-tests/`。
+它会根据 `config.json` 导出测试数据到题目目录下的 `exported-tests/`：
+
+- 普通题导出静态的 `.in/.ans` 文件。
+- 交互题导出供 interactor 使用的原始 `.interactor.in` 文件。
 
 ### 使用 AI Agent 自动造题
 
@@ -154,7 +157,7 @@ npx skills add .
 
 - `scripts/create-workspace.ps1`：创建新的题目工作区。
 - `scripts/run-all-tests.ps1`：统一执行本地验证。
-- `scripts/export-testdata.ps1`：把 `generator` 导出成可直接上传到 OJ 的静态数据文件。
+- `scripts/export-testdata.ps1`：导出普通题静态数据，或导出交互题喂给 interactor 的原始数据文件。
 - `scripts/templates/`：普通题、交互题和共享文件模板。
 - `examples/`：可直接运行的示例题工作区。
 - `SKILL.md`：让 AI Agent 稳定产出高质量题面、题解、数据的 agent skill。

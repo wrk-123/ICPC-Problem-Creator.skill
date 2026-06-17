@@ -182,11 +182,6 @@ function Test-OneWorkspace {
         return
     }
 
-    if ($problem.Interactive) {
-        Add-Failure -Workspace $problem.Slug -Stage "config" -Message "交互题不能导出为静态测试数据。"
-        return
-    }
-
     $outputPath = Get-ExportOutputRoot -Problem $problem
     $buildRoot = Join-Path $artifactRoot (Join-Path "export" $problem.Slug)
     if (Test-Path -LiteralPath $buildRoot) {
@@ -202,7 +197,11 @@ function Test-OneWorkspace {
     }
 
     Write-Stage -Stage "workspace" -Message "$($problem.Slug) -> $outputPath"
-    Write-Stage -Stage "export" -Message "runtime memoryLimitMb=$($problem.MemoryLimitMb) 仅对主解生效；导出阶段默认信任已验过的数据，不再重复运行 validator。"
+    if ($problem.Interactive) {
+        Write-Stage -Stage "export" -Message "interactive export: 导出供 interactor 使用的原始输入文件；导出阶段默认信任已验过的数据，不再重复运行 validator。"
+    } else {
+        Write-Stage -Stage "export" -Message "runtime memoryLimitMb=$($problem.MemoryLimitMb) 仅对主解生效；导出阶段默认信任已验过的数据，不再重复运行 validator。"
+    }
 
     $compiledPrograms = @{}
     $compileFailed = $false
@@ -212,7 +211,9 @@ function Test-OneWorkspace {
     )
 
     $mainSolution = @($problem.Solutions | Where-Object { $_.Role -eq "main" })[0]
-    $compileEntries += $mainSolution
+    if (-not $problem.Interactive) {
+        $compileEntries += $mainSolution
+    }
 
     $compiledPrograms = @{}
     Write-Stage -Stage "compile" -Message $problem.Slug
@@ -260,7 +261,7 @@ function Test-OneWorkspace {
     }
 
     $generatorPath = [string]$compiledPrograms["generator"]
-    $mainInvocation = Get-Invocation -Problem $problem -Entry $mainSolution -CompiledPrograms $compiledPrograms
+    $mainInvocation = if ($problem.Interactive) { $null } else { Get-Invocation -Problem $problem -Entry $mainSolution -CompiledPrograms $compiledPrograms }
     $timeoutMs = [Math]::Max($problem.TimeLimitMs * 3, $problem.TimeLimitMs + 1000)
     $toolTimeoutMs = [Math]::Max($problem.TimeLimitMs * 60, 60000)
     $runtimeMemoryLimitMb = [Math]::Max($problem.MemoryLimitMb, 1)
@@ -274,8 +275,9 @@ function Test-OneWorkspace {
 
     foreach ($caseInfo in $problem.Cases) {
         $groupDir = Join-Path $outputPath $caseInfo.Group
-        $inputPath = Join-Path $groupDir ($caseInfo.Name + ".in")
-        $answerPath = Join-Path $groupDir ($caseInfo.Name + ".ans")
+        $inputFileName = if ($problem.Interactive) { $caseInfo.Name + ".interactor.in" } else { $caseInfo.Name + ".in" }
+        $inputPath = Join-Path $groupDir $inputFileName
+        $answerPath = if ($problem.Interactive) { $null } else { Join-Path $groupDir ($caseInfo.Name + ".ans") }
 
         Write-Stage -Stage "generate" -Message "$($problem.Slug) case=$($caseInfo.Name)"
         $generateResult = Invoke-External -RepoRoot $repoRoot -FilePath $generatorPath -Arguments @($caseInfo.Type, [string]$caseInfo.Seed) -WorkingDirectory $problem.WorkspacePath -TimeoutMs $toolTimeoutMs -MemoryLimitMb $toolMemoryLimitMb
@@ -297,6 +299,7 @@ function Test-OneWorkspace {
             Seed       = $caseInfo.Seed
             Group      = $caseInfo.Group
             InputPath  = $inputPath
+            InputFile  = $inputFileName
             AnswerPath = $answerPath
         }) | Out-Null
     }
@@ -307,6 +310,17 @@ function Test-OneWorkspace {
     }
 
     foreach ($caseInfo in $generatedCases) {
+        if ($problem.Interactive) {
+            $manifestCases.Add([pscustomobject]@{
+                name           = $caseInfo.Name
+                type           = $caseInfo.Type
+                seed           = $caseInfo.Seed
+                group          = $caseInfo.Group
+                interactorInput = (Join-Path $caseInfo.Group $caseInfo.InputFile)
+            }) | Out-Null
+            continue
+        }
+
         Write-Stage -Stage "answer" -Message "$($problem.Slug) case=$($caseInfo.Name)"
         $mainResult = Invoke-External -RepoRoot $repoRoot -FilePath $mainInvocation.FilePath -Arguments $mainInvocation.Arguments -WorkingDirectory $problem.WorkspacePath -InputFile $caseInfo.InputPath -TimeoutMs $timeoutMs -MemoryLimitMb $runtimeMemoryLimitMb
         if ($mainResult.TimedOut -or $mainResult.ExitCode -ne 0) {
@@ -343,6 +357,8 @@ function Test-OneWorkspace {
     $manifest = [pscustomobject]@{
         slug        = $problem.Slug
         title       = $problem.Title
+        interactive = $problem.Interactive
+        exportMode  = $(if ($problem.Interactive) { "interactive-raw" } else { "static" })
         exportedAt  = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss zzz")
         workspace   = $problem.WorkspacePath
         outputRoot  = $outputPath
