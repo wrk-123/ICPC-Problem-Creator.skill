@@ -105,7 +105,7 @@ function Invoke-InteractivePair {
 
     $contestantList = @($ContestantFilePath) + $ContestantArguments
     $interactorList = @($InteractorFilePath) + $InteractorArguments
-    $runnerResult = Invoke-External -RepoRoot $repoRoot -FilePath $python -Arguments @($runnerPath, (ConvertTo-Json $contestantList -Compress), (ConvertTo-Json $interactorList -Compress), $WorkingDirectory, ([string]([Math]::Max($TimeoutMs, 1) / 1000.0))) -WorkingDirectory $repoRoot -TimeoutMs ([Math]::Max($TimeoutMs + 5000, 10000))
+    $runnerResult = Invoke-External -RepoRoot $repoRoot -FilePath $python -Arguments @($runnerPath, (ConvertTo-Json $contestantList -Compress), (ConvertTo-Json $interactorList -Compress), $WorkingDirectory, ([string]([Math]::Max($TimeoutMs, 1) / 1000.0))) -WorkingDirectory $repoRoot -TimeoutMs ([Math]::Max($TimeoutMs + 5000, 10000)) -MemoryLimitMb 256
     if ($runnerResult.ExitCode -ne 0) {
         throw "交互 broker 执行失败：$($runnerResult.Stderr)"
     }
@@ -123,8 +123,8 @@ function Invoke-InteractivePair {
     return [pscustomobject]@{
         ContestantCommand  = $contestantCommand
         InteractorCommand  = $interactorCommand
-        ContestantExitCode = [int]$payload.contestantExitCode
-        InteractorExitCode = [int]$payload.interactorExitCode
+        ContestantExitCode = [long]$payload.contestantExitCode
+        InteractorExitCode = [long]$payload.interactorExitCode
         ContestantStderr   = [string]$payload.contestantStderr
         InteractorStderr   = [string]$payload.interactorStderr
         Verdict            = $verdict
